@@ -7,34 +7,34 @@ An embedded real-time operating system architecture implemented on a Raspberry P
 ## 📁 Project Directory Structure
 
 ```text
-confidence_aware_rtos_pi/
-├── EdgeRTOS/
-│   ├── __init__.py
-│   ├── task.py
-│   ├── scheduler.py
-│   ├── metrics.py
-│   └── schedulability.py
-├── Line_Following_Robot/
-│   ├── ai_models/
-│   │   ├── line_classifier.tflite
-│   │   └── object_detector.tflite
-│   ├── applications/
-│   │   ├── line_follower_app.py
-│   │   ├── line_follower_adaptive.py
-│   │   ├── object_detection_app.py
-│   │   └── sensor_interface.py
-│   ├── experiments/
-│   │   ├── run_baseline.py
-│   │   ├── run_adaptive.py
-│   │   ├── data_collection.py
-│   │   └── analysis.py
-│   └── dataset/
-│       └── [training/testing data samples]
-└── docs/
-    ├── trd.md
-    ├── manual.md
-    └── scheduling_diagrams/
-
+EdgeRTOS/                          ← RTOS core library
+├── __init__.py
+├── task.py
+├── scheduler.py
+├── metrics.py
+└── schedulability.py
+Line_Following_Robot/              ← Robot application
+│
+├── motor_control/                 ← Hardware HAL layer
+│   └── sensor_interface.py        (IR sensors, motors, camera)
+│
+├── ai/                            ← AI inference layer
+│   ├── object_detection_app.py    (obstacle detection task)
+│   └── models/                    (TFLite model binaries)
+│       ├── line_classifier.tflite
+│       └── object_detector.tflite
+│
+└── robot/                         ← High-level robot logic
+    ├── line_follower_app.py        (fixed-rate baseline)
+    ├── line_follower_adaptive.py   (confidence-adaptive)
+    └── experiments/
+        ├── run_baseline.py
+        ├── run_adaptive.py
+        ├── data_collection.py
+        └── analysis.py
+examples/                          ← Generic EdgeRTOS demos
+tests/                             ← Unit test suite
+docs/                              ← Design documents
 ```
 
 ---
@@ -95,7 +95,7 @@ To evaluate the architectural efficiency gains of the confidence-aware scheduler
 1. **Establish the Static Baseline Profile:**
 Runs the robot at a locked, invariant inference frame rate and captures nominal system metrics.
 ```bash
-python -m Line_Following_Robot.experiments.run_baseline
+python -m Line_Following_Robot.robot.experiments.run_baseline
 
 ```
 
@@ -103,7 +103,7 @@ python -m Line_Following_Robot.experiments.run_baseline
 2. **Execute the Dynamic Adaptive Driver:**
 Launches the active closed-loop RTOS scheduler governed by incoming runtime model confidence tracking.
 ```bash
-python -m Line_Following_Robot.experiments.run_adaptive
+python -m Line_Following_Robot.robot.experiments.run_adaptive
 
 ```
 
@@ -113,7 +113,7 @@ Parses the output CSV metrics generated within the workspace to compile comparat
 
 
 ```bash
-python -m Line_Following_Robot.experiments.analysis
+python -m Line_Following_Robot.robot.experiments.analysis
 
 ```
 
