@@ -1,6 +1,6 @@
 # Confidence-Aware RTOS Line-Following Robot
 
-An embedded real-time operating system architecture implemented on a Raspberry Pi that feeds an on-device AI model's prediction-confidence score back into the RTOS scheduler as a first-class input. The system dynamically scales task priorities and inference rates to optimize power on predictable path segments while guaranteeing deterministic, safety-critical execution during complex track maneuvers[cite: 1, 2, 3].
+An embedded real-time operating system architecture implemented on a Raspberry Pi that feeds an on-device AI model's prediction-confidence score back into the RTOS scheduler as a first-class input. The system dynamically scales task priorities and inference rates to optimize power on predictable path segments while guaranteeing deterministic, safety-critical execution during complex track maneuvers.
 
 ---
 
