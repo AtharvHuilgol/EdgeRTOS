@@ -1,0 +1,12 @@
+# EdgeRTOS Core Requirements
+# Works on Windows, macOS, Linux (x86-64), and Raspberry Pi 4/5 (arm64)
+# For Raspberry Pi hardware extras, also install: requirements-rpi.txt
+
+# Runtime monitoring (optional — gracefully skipped if absent)
+psutil>=5.9.0
+
+# Testing
+pytest>=7.4.0
+
+# Analysis / plotting (used in experiments/analysis.py)
+numpy>=1.24.0

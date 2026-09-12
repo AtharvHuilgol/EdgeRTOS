@@ -1,0 +1,29 @@
+# EdgeRTOS Raspberry Pi 4 / Ubuntu Hardware Requirements
+# Install AFTER the base requirements.txt:
+#   pip install -r requirements.txt
+#   pip install -r requirements-rpi.txt
+#
+# Prerequisites on Ubuntu 22.04 / 24.04 arm64:
+#   sudo apt-get update
+#   sudo apt-get install -y python3-dev python3-pip lgpio libgpiod2
+#   sudo apt-get install -y i2c-tools python3-smbus
+#   # Enable I2C: sudo raspi-config -> Interface Options -> I2C -> Enable
+#   # Enable camera: sudo raspi-config -> Interface Options -> Camera -> Enable
+
+# GPIO control (RPi.GPIO uses lgpio backend on Ubuntu)
+RPi.GPIO>=0.7.1
+
+# I2C / SMBus for INA219 power sensor
+smbus2>=0.4.2
+
+# INA219 current/voltage/power sensor driver
+pi-ina219>=1.4.0
+
+# AI inference — Google's Edge AI runtime (replaces deprecated tflite-runtime)
+# Supports Python 3.9–3.11 on arm64 (Raspberry Pi 4/5 Ubuntu)
+ai-edge-litert>=1.0.1
+
+# Camera frame capture (optional — used when PiCamera2 is available)
+# Install separately via apt for best results:
+#   sudo apt-get install -y python3-picamera2
+# picamera2>=0.3.12

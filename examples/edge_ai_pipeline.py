@@ -13,6 +13,12 @@ Main execution script demonstrating the 5-task EdgeRTOS pipeline:
 5. T_actuate      : Event-driven buzzer/LED actuator triggered on confirmed detection
 
 Designed for Raspberry Pi 4/5 (Ubuntu 22.04) with cross-platform simulation on Windows.
+
+RPi4 Ubuntu GPIO wiring:
+  Buzzer  → BCM 18  (PWM0 capable)
+  LED     → BCM 25  (with 330 Ω series resistor to GND)
+  Trigger → BCM 23  (HC-SR04 ultrasonic trigger)
+  Echo    → BCM 24  (HC-SR04 echo, 5V→3.3V voltage divider!)
 """
 
 import math
@@ -27,16 +33,37 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import EdgeRTOS as rtos
 from EdgeRTOS import Priority, Task, Queue, EventGroup, ConfidenceScheduler
 
+# ── Platform detection ────────────────────────────────────────────────────────
 ON_RASPBERRY_PI = False
 try:
     if os.path.exists("/sys/firmware/devicetree/base/model"):
-        ON_RASPBERRY_PI = True
+        with open("/sys/firmware/devicetree/base/model", "r") as _f:
+            if "raspberry pi" in _f.read().lower():
+                ON_RASPBERRY_PI = True
 except Exception:
     ON_RASPBERRY_PI = False
 
-BUZZER_PIN = 18
-TRIGGER_PIN = 23
-ECHO_PIN = 24
+# ── GPIO (RPi only) ───────────────────────────────────────────────────────────
+_GPIO = None
+if ON_RASPBERRY_PI:
+    try:
+        import RPi.GPIO as _GPIO  # type: ignore
+        _GPIO.setmode(_GPIO.BCM)
+        _GPIO.setwarnings(False)
+    except ImportError:
+        print("[WARN] RPi.GPIO not installed. Install with: pip install RPi.GPIO")
+        _GPIO = None
+
+BUZZER_PIN   = 18   # BCM 18 — active buzzer or PWM buzzer
+LED_PIN      = 25   # BCM 25 — indicator LED (330 Ω to GND)
+TRIGGER_PIN  = 23   # BCM 23 — HC-SR04 ultrasonic trigger
+ECHO_PIN     = 24   # BCM 24 — HC-SR04 echo (use voltage divider!)
+
+# Configure output pins on RPi
+if _GPIO is not None:
+    for _pin in (BUZZER_PIN, LED_PIN, TRIGGER_PIN):
+        _GPIO.setup(_pin, _GPIO.OUT, initial=_GPIO.LOW)
+    _GPIO.setup(ECHO_PIN, _GPIO.IN)
 
 frame_queue = rtos.Queue(maxsize=3)
 inference_queue = rtos.Queue(maxsize=5)
@@ -137,10 +164,26 @@ def task_sensor_check():
     time.sleep(0.002)
 
 
-def task_actuate():
+def task_actuate() -> None:
+    """
+    T_actuate: Event-driven actuator — fires buzzer + LED when hazard is confirmed.
+    On RPi4: drives BCM 18 (buzzer) and BCM 25 (LED) via GPIO.
+    On simulation: prints a console notification.
+    """
     triggered = system_events.wait_flag(FLAG_ACTUATE_TRIGGER, clear_on_exit=True, timeout_ms=2)
-    if triggered:
-        pass
+    if not triggered:
+        return
+
+    if _GPIO is not None:
+        # ── Real hardware: pulse buzzer + LED for 80 ms ───────────────────────
+        _GPIO.output(BUZZER_PIN, _GPIO.HIGH)
+        _GPIO.output(LED_PIN,    _GPIO.HIGH)
+        time.sleep(0.08)
+        _GPIO.output(BUZZER_PIN, _GPIO.LOW)
+        _GPIO.output(LED_PIN,    _GPIO.LOW)
+    else:
+        # ── Simulation: console alert ─────────────────────────────────────────
+        print("\n[ACTUATE] ⚠  HAZARD CONFIRMED — buzzer/LED would fire on RPi4")
 
 
 def run_pipeline(duration_sec: float = 15.0, csv_output: str = "edgertos_metrics_log.csv"):
@@ -248,6 +291,14 @@ def run_pipeline(duration_sec: float = 15.0, csv_output: str = "edgertos_metrics
         print("\nStopping demo early on user interrupt...")
 
     scheduler.stop()
+
+    # ── GPIO cleanup (RPi only) ───────────────────────────────────────────────
+    if _GPIO is not None:
+        try:
+            _GPIO.cleanup()
+        except Exception:
+            pass
+
     print("\n\n" + "=" * 95)
     print("Scheduler Stopped. Generating Final Task Statistics Table:")
     scheduler.print_task_table()

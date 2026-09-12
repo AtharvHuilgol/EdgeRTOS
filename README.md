@@ -72,50 +72,80 @@ The engine isolates execution responsibilities into distinct periodic tasks with
 
 ## 🚀 Getting Started
 
+> **Raspberry Pi 4 / Ubuntu users:** See **[INSTALL_RPI.md](INSTALL_RPI.md)** for the full step-by-step hardware setup, GPIO wiring, and real-time scheduling configuration.
+
 ### Prerequisites
 
-1. **Hardware Assembly:** Ensure your Raspberry Pi is wired correctly to a downward-facing Pi Camera Module, a 5-channel IR sensor array, an L298N/TB6612FNG motor driver, and an INA219 current/power monitoring breakout board.
+1. **Hardware Assembly:** Wire your Raspberry Pi 4 Model B to:
+   - Pi Camera Module (downward-facing)
+   - 5-channel IR sensor array (BCM 17, 27, 22, 23, 24)
+   - L298N / TB6612FNG motor driver (BCM 12, 5, 6, 13, 20, 21)
+   - INA219 power monitor breakout (I²C: SDA=GPIO2, SCL=GPIO3)
+   - Active buzzer on BCM 18, LED on BCM 25
 
+2. **Real-Time Environment (Ubuntu):** Install `lgpio` for GPIO access, then grant real-time scheduling permission:
+   ```bash
+   sudo apt-get install -y lgpio libgpiod2
+   # Grant rtprio (see INSTALL_RPI.md §7 for details):
+   sudo sh -c 'echo "ubuntu - rtprio 99" >> /etc/security/limits.d/99-rtprio.conf'
+   ```
 
-2. **Real-Time Environment:** Run a kernel compiled with the `PREEMPT_RT` patch, or execute all runtime testing using elevated privileges to leverage `SCHED_FIFO` process scheduling.
+3. **Dependencies:** Clone the repo and install:
+   ```bash
+   git clone https://github.com/AtharvHuilgol/EdgeRTOS.git
+   cd EdgeRTOS
 
+   # All platforms (simulation + testing):
+   pip install -r requirements.txt
 
-3. **Dependencies:** Install the project dependencies locally:
+   # Raspberry Pi 4/5 hardware extras:
+   pip install -r requirements-rpi.txt
+
+   # Optional: install EdgeRTOS as a proper Python package
+   pip install -e .
+   ```
+
+   Key packages installed on RPi:
+   | Package | Purpose |
+   |---|---|
+   | `psutil` | CPU monitoring |
+   | `RPi.GPIO` | GPIO / motor / sensor control |
+   | `smbus2`, `pi-ina219` | INA219 I²C power sensor |
+   | `ai-edge-litert` | TFLite runtime for CNN inference (replaces deprecated `tflite-runtime`) |
+   | `numpy` | Experiment analysis |
+   | `pytest` | Test suite |
+
+### Quick Start (Simulation — works on any OS)
+
 ```bash
-pip install numpy tensorflow-lite-runtime psutil rpi.gpio
+# Basic RTOS demo
+python examples/basic_rtos_demo.py
 
+# Full AI pipeline simulation (no hardware needed)
+python examples/edge_ai_pipeline.py
+
+# Run unit tests
+python -m pytest tests/ -v
 ```
-
-
 
 ### Running the Experiments
 
-To evaluate the architectural efficiency gains of the confidence-aware scheduler against a traditional static-rate real-time loop, follow the testing pipeline below:
+To evaluate the efficiency gains of the confidence-aware scheduler vs a traditional static-rate loop:
 
-1. **Establish the Static Baseline Profile:**
-Runs the robot at a locked, invariant inference frame rate and captures nominal system metrics.
-```bash
-python -m Line_Following_Robot.robot.experiments.run_baseline
+1. **Static Baseline Profile** — fixed priority, no adaptation:
+   ```bash
+   python -m Line_Following_Robot.robot.experiments.run_baseline
+   ```
 
-```
+2. **Confidence-Adaptive Mode** — EdgeRTOS closed-loop scheduler:
+   ```bash
+   python -m Line_Following_Robot.robot.experiments.run_adaptive
+   ```
 
-
-2. **Execute the Dynamic Adaptive Driver:**
-Launches the active closed-loop RTOS scheduler governed by incoming runtime model confidence tracking.
-```bash
-python -m Line_Following_Robot.robot.experiments.run_adaptive
-
-```
-
-
-3. **Compile Analysis and Performance Metrics:**
-Parses the output CSV metrics generated within the workspace to compile comparative performance diagnostics (CPU utilization curves, timeline jitter, power usage profiles, and cross-lap deadline hit/miss ratios).
-
-
-```bash
-python -m Line_Following_Robot.robot.experiments.analysis
-
-```
+3. **Analysis & Performance Metrics** — CPU curves, jitter, deadline hit/miss ratios:
+   ```bash
+   python -m Line_Following_Robot.robot.experiments.analysis
+   ```
 
 
 
