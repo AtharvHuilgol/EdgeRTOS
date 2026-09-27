@@ -10,3 +10,6 @@ pytest>=7.4.0
 
 # Analysis / plotting (used in experiments/analysis.py)
 numpy>=1.24.0
+
+# Computer vision (used by AI line detection pipeline)
+opencv-python>=4.8.0
