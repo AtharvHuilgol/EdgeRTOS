@@ -135,33 +135,56 @@ _camera = None
 _HAS_CV2 = False
 CAMERA_INDEX = 0  # /dev/video0 on RPi
 
+# Try importing cv2. On RPi with sudo, prefer the apt-installed system package.
+# Fix: 'sudo python3' uses system Python which may not see pip packages.
+# Solution: install via apt → sudo apt install python3-opencv
+# OR:       install globally → sudo pip3 install opencv-python-headless
 try:
     import cv2  # type: ignore
     _HAS_CV2 = True
 except ImportError:
     _HAS_CV2 = False
+    print("[CAM] OpenCV not found. Install with ONE of:")
+    print("      sudo apt install python3-opencv          ← recommended on RPi")
+    print("      sudo pip3 install opencv-python-headless ← if using system python with sudo")
+    print("[CAM] Running in simulation mode until OpenCV is available.")
 
 
 def init_camera():
-    """Initialize camera via OpenCV VideoCapture."""
+    """Initialize camera via OpenCV VideoCapture with V4L2 backend (RPi safe)."""
     global _camera
     if not _HAS_CV2:
-        print("[CAM] OpenCV not available — using simulation")
+        print("[CAM] OpenCV not available — running in simulation mode")
         return
     try:
-        _camera = cv2.VideoCapture(CAMERA_INDEX)
+        # Use explicit V4L2 backend on Linux.
+        # cv2.VideoCapture(index) alone can segfault on RPi CSI cameras
+        # because it tries GStreamer/other backends before V4L2.
+        import platform
+        if platform.system() == "Linux":
+            _camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_V4L2)
+        else:
+            _camera = cv2.VideoCapture(CAMERA_INDEX)
+
         if not _camera.isOpened():
-            print(f"[CAM] Could not open camera index {CAMERA_INDEX} — using simulation")
+            print(f"[CAM] Could not open /dev/video{CAMERA_INDEX}.")
+            print(f"      Check: ls /dev/video*")
+            print(f"      For CSI PiCamera: sudo apt install python3-libcamera v4l-utils")
+            print(f"                        then: sudo modprobe bcm2835-v4l2  (or reboot)")
             _camera = None
             return
-        # Set resolution to match model expectations
+
+        # Set capture resolution
         _camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
         _camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+        _camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
+
         actual_w = int(_camera.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(_camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"[CAM] OpenCV VideoCapture initialized ({actual_w}×{actual_h} BGR)")
+        print(f"[CAM] OpenCV VideoCapture ready ({actual_w}×{actual_h} BGR, V4L2 backend)")
+
     except Exception as exc:
-        print(f"[CAM] Camera init failed: {exc} — using simulation")
+        print(f"[CAM] Camera init error: {exc} — running in simulation mode")
         _camera = None
 
 
@@ -313,9 +336,13 @@ def task_uart_send():
 def task_sched_monitor():
     """
     T_sched_monitor: Adapts AI inference rate based on model confidence.
-    When the line is centered, inference slows down (saves CPU/power).
-    When deviating, inference speeds up for faster correction.
+    Guards against conf_scheduler being uninitialised at startup.
     """
+    # Guard: conf_scheduler is set inside run_camera_pid_robot().
+    # If somehow this task fires before that completes, skip safely.
+    if 'conf_scheduler' not in globals() or conf_scheduler is None:
+        return
+
     result = infer_result_queue.receive(timeout_ms=2)
     if not result:
         return
