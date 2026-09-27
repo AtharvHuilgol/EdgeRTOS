@@ -1,4 +1,4 @@
-﻿"""
+"""
 EdgeRTOS Task Management & Real-Time Synchronization Primitives
 ==============================================================
 Defines:
@@ -45,6 +45,10 @@ def set_native_thread_priority(priority: int, policy: int = SCHED_FIFO) -> bool:
     """
     Attempt to configure POSIX real-time priority on Linux/Raspberry Pi.
     Gracefully falls back on Windows or if running without CAP_SYS_NICE/root.
+
+    ARM64 fix: argtypes + restype MUST be declared before calling any ctypes
+    function. Without them, AArch64 ABI passes args in wrong registers → SIGSEGV
+    that bypasses Python's try/except (native crash, faulthandler shows no frame).
     """
     if not IS_LINUX or _libc is None:
         return False
@@ -52,13 +56,33 @@ def set_native_thread_priority(priority: int, policy: int = SCHED_FIFO) -> bool:
     try:
         rt_prio = max(1, min(99, priority))
         param = _SchedParam(rt_prio)
-        pthread_self = _libc.pthread_self
-        pthread_self.restype = ctypes.c_ulong
-        tid = pthread_self()
-        res = _libc.pthread_setschedparam(tid, ctypes.c_int(policy), ctypes.byref(param))
+
+        # ── Declare signatures BEFORE calling — mandatory on ARM64 ──────────
+        _libc.pthread_self.argtypes = []
+        _libc.pthread_self.restype = ctypes.c_ulong
+
+        _libc.pthread_setschedparam.argtypes = [
+            ctypes.c_ulong,               # pthread_t  (unsigned long on ARM64)
+            ctypes.c_int,                 # int policy (SCHED_FIFO = 1)
+            ctypes.POINTER(_SchedParam),  # const struct sched_param *
+        ]
+        _libc.pthread_setschedparam.restype = ctypes.c_int
+
+        tid = _libc.pthread_self()
+        res = _libc.pthread_setschedparam(
+            tid, ctypes.c_int(policy), ctypes.byref(param)
+        )
         return res == 0
+
     except Exception:
-        return False
+        # Secondary fallback: use process nice level (negative = higher priority,
+        # requires root for values < 0, which we already have via sudo).
+        try:
+            nice_val = max(-20, min(19, -(priority // 5)))
+            os.nice(nice_val)
+            return True
+        except Exception:
+            return False
 
 
 def get_time_s() -> float:
